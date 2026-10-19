@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-papel font-corpo text-texto antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-titulo text-texto;
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-carmim ring-offset-2 ring-offset-papel;
+  }
+}
+
+@layer utilities {
+  /* números de medição alinhados (pressão, IMC, horas) */
+  .numeros {
+    font-variant-numeric: tabular-nums;
+  }
+}
