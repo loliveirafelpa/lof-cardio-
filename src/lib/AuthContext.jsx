@@ -1,12 +1,24 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { supabase } from './supabaseClient'
 import { buscarMeuPerfil } from './perfisApi'
 import { temConsentimentoSaudeVigente } from './consentimentosApi'
 
+// PROTÓTIPO: não há senha nem Supabase Auth. Quem testa escolhe um perfil na tela de entrada
+// e a escolha fica guardada neste navegador. A interface do contexto (sessao, perfil, ehAdmin,
+// consentiu, recarregar, sair) é a mesma que a versão com Supabase vai ter.
+const CHAVE_SESSAO = 'lof-heart-demo-sessao'
 const AuthContext = createContext(null)
 
+function lerSessaoSalva() {
+  try {
+    const id = localStorage.getItem(CHAVE_SESSAO)
+    return id ? { user: { id, user_metadata: {} } } : null
+  } catch {
+    return null
+  }
+}
+
 export function AuthProvider({ children }) {
-  const [sessao, setSessao] = useState(null)
+  const [sessao, setSessao] = useState(lerSessaoSalva)
   const [perfil, setPerfil] = useState(null)
   const [consentiu, setConsentiu] = useState(false)
   const [carregando, setCarregando] = useState(true)
@@ -23,18 +35,30 @@ export function AuthProvider({ children }) {
   }, [])
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
-      setSessao(data.session)
-      await carregarPerfil(data.session?.user.id).catch(() => {})
-      setCarregando(false)
-    })
-    const { data: sub } = supabase.auth.onAuthStateChange((_evento, novaSessao) => {
-      setSessao(novaSessao)
-      // Fora do callback para não travar o cliente do Supabase.
-      setTimeout(() => carregarPerfil(novaSessao?.user.id).catch(() => {}), 0)
-    })
-    return () => sub.subscription.unsubscribe()
-  }, [carregarPerfil])
+    carregarPerfil(sessao?.user.id)
+      // perfil apagado (ex.: dados restaurados): volta para a escolha de perfil
+      .catch(() => setSessao(null))
+      .finally(() => setCarregando(false))
+  }, [sessao, carregarPerfil])
+
+  function entrarComo(id) {
+    try {
+      localStorage.setItem(CHAVE_SESSAO, id)
+    } catch {
+      // sem armazenamento: a escolha vale até recarregar a página
+    }
+    setCarregando(true)
+    setSessao({ user: { id, user_metadata: {} } })
+  }
+
+  function sair() {
+    try {
+      localStorage.removeItem(CHAVE_SESSAO)
+    } catch {
+      // idem
+    }
+    setSessao(null)
+  }
 
   const valor = {
     sessao,
@@ -44,7 +68,8 @@ export function AuthProvider({ children }) {
     consentiu,
     carregando,
     recarregar: () => carregarPerfil(sessao?.user.id),
-    sair: () => supabase.auth.signOut(),
+    entrarComo,
+    sair,
   }
 
   return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>

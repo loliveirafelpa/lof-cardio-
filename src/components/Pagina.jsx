@@ -12,7 +12,7 @@ export default function Pagina({ sobretitulo, titulo, descricao, aviso, largura 
   return (
     <>
       <div className="relative overflow-hidden bg-noite text-branco">
-        <div className={`relative mx-auto ${largura} px-4 pb-16 pt-8 sm:pt-12`}>
+        <div className={`relative mx-auto ${largura} px-4 pb-20 pt-8 sm:pt-12`}>
           {sobretitulo && (
             <p className="font-interface text-[11px] font-semibold uppercase tracking-[0.2em] text-rosado">{sobretitulo}</p>
           )}

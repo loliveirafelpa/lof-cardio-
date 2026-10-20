@@ -1,40 +1,50 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { supabase } from '../lib/supabaseClient'
+import { ChevronRight, Stethoscope, UserRound } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
+import { listarPerfisDemonstracao } from '../lib/perfisApi'
+import { calcularIdade } from '../lib/imc'
 import LayoutAcesso from '../components/LayoutAcesso'
 import { Destaque } from '../components/Pagina'
-import Campo from '../components/Campo'
-import Botao from '../components/Botao'
+
+// PROTÓTIPO: em vez de e-mail e senha, quem testa escolhe com qual perfil entrar.
+// Na versão com Supabase, volta o formulário de e-mail e senha (ver histórico do git).
+const NOTAS = {
+  'p-carlos': 'Tabagismo ativado · sintoma grave recente',
+  'p-ana': 'Pressão acima do limite com frequência · médias ligadas',
+  'p-marcos': 'Inativo · sem registros há 9 dias',
+  'p-juliana': 'Cadastrada ontem · ainda não fez o primeiro acesso',
+  'p-roberto': 'Acompanhamento encerrado',
+}
 
 export default function Login() {
-  const { sessao } = useAuth()
-  const [email, setEmail] = useState('')
-  const [senha, setSenha] = useState('')
-  const [erro, setErro] = useState('')
-  const [aviso, setAviso] = useState('')
-  const [enviando, setEnviando] = useState(false)
+  const { sessao, entrarComo } = useAuth()
+  const [perfis, setPerfis] = useState([])
+
+  useEffect(() => {
+    listarPerfisDemonstracao().then(setPerfis)
+  }, [])
 
   if (sessao) return <Navigate to="/app" replace />
 
-  async function entrar(e) {
-    e.preventDefault()
-    setErro('')
-    setEnviando(true)
-    const { error } = await supabase.auth.signInWithPassword({ email, password: senha })
-    setEnviando(false)
-    if (error) setErro('E-mail ou senha incorretos.')
-  }
+  const medica = perfis.find((p) => p.role === 'admin')
+  const pacientes = perfis.filter((p) => p.role === 'paciente')
 
-  async function esqueciSenha() {
-    setErro('')
-    if (!email) return setErro('Digite seu e-mail acima para receber o link.')
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/definir-senha`,
-    })
-    if (error) return setErro('Não foi possível enviar agora. Tente novamente em alguns minutos.')
-    setAviso('Se este e-mail estiver cadastrado, você vai receber um link para criar uma nova senha.')
-  }
+  const Opcao = ({ perfil, Icone, titulo, nota }) => (
+    <button
+      onClick={() => entrarComo(perfil.id)}
+      className="flex w-full items-center gap-3 rounded-2xl border border-borda bg-branco p-3.5 text-left transition-colors hover:border-carmim"
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blush text-carmim">
+        <Icone size={20} aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-interface text-sm font-semibold">{titulo}</span>
+        {nota && <span className="block truncate text-xs text-textoSecundario">{nota}</span>}
+      </span>
+      <ChevronRight size={18} className="shrink-0 text-textoSecundario" aria-hidden />
+    </button>
+  )
 
   return (
     <LayoutAcesso
@@ -46,21 +56,37 @@ export default function Login() {
         </>
       }
     >
-      <form onSubmit={entrar} className="space-y-4 rounded-3xl bg-branco p-6 shadow-cartao sm:p-7">
-        <h2 className="font-titulo text-2xl font-semibold">Entrar</h2>
-        <Campo rotulo="E-mail" id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-        <Campo rotulo="Senha" id="senha" type="password" autoComplete="current-password" required value={senha} onChange={(e) => setSenha(e.target.value)} />
-        {erro && <p className="text-sm text-alerta" role="alert">{erro}</p>}
-        {aviso && <p className="text-sm text-carmim" role="status">{aviso}</p>}
-        <Botao type="submit" className="w-full py-3" disabled={enviando}>
-          {enviando ? 'Entrando…' : 'Entrar'}
-        </Botao>
-        <Botao type="button" variante="discreto" className="w-full" onClick={esqueciSenha}>
-          Esqueci minha senha
-        </Botao>
-      </form>
+      <div className="space-y-5 rounded-3xl bg-branco p-6 shadow-cartao sm:p-7">
+        <div>
+          <h2 className="font-titulo text-2xl font-semibold">Entrar no protótipo</h2>
+          <p className="mt-1 text-sm text-textoSecundario">Escolha um perfil para navegar. Os dados são fictícios.</p>
+        </div>
 
-      <p className="mt-6 text-center text-xs text-textoSecundario">O acesso é feito por convite da sua cardiologista.</p>
+        {medica && (
+          <div>
+            <p className="mb-2 font-interface text-[11px] font-semibold uppercase tracking-[0.18em] text-carmim">Visão profissional</p>
+            <Opcao perfil={medica} Icone={Stethoscope} titulo="Entrar como cardiologista" nota="Painel, configuração, medicamentos e exames" />
+          </div>
+        )}
+
+        <div>
+          <p className="mb-2 font-interface text-[11px] font-semibold uppercase tracking-[0.18em] text-carmim">Aplicativo do paciente</p>
+          <div className="space-y-2">
+            {pacientes.map((p) => {
+              const idade = calcularIdade(p.dataNascimento)
+              return (
+                <Opcao
+                  key={p.id}
+                  perfil={p}
+                  Icone={UserRound}
+                  titulo={`${p.nome}${idade !== null ? `, ${idade} anos` : ''}`}
+                  nota={NOTAS[p.id] ?? 'Cadastrado durante o teste'}
+                />
+              )
+            })}
+          </div>
+        </div>
+      </div>
     </LayoutAcesso>
   )
 }

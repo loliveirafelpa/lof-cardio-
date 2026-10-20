@@ -10,7 +10,8 @@ export const cores = {
   blush: '#F6E4E3', // rosa bem claro — chips selecionados e áreas suaves
   noite: '#16171F', // fundo escuro da terceira imagem — cabeçalho e faixas de título
   noiteSuave: '#252836', // segunda camada escura — cartões sobre a faixa escura
-  ardosia: '#55607F', // reflexos azulados da terceira imagem — segunda série de gráficos, rótulos sobre escuro
+  ardosia: '#4A5FA0', // reflexos azulados da terceira imagem — segunda série dos gráficos (par validado com o carmim para daltonismo)
+  grade: '#EFE6E5', // linhas de grade dos gráficos — um passo fora do branco, bem recessivas
   papel: '#FAF6F5', // fundo geral das telas — o branco quente da segunda imagem
   branco: '#FFFFFF',
   texto: '#1E1B22', // texto principal
