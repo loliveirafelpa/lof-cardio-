@@ -54,28 +54,6 @@ export const FREQUENCIAS = [
   { valor: 'semanal', rotulo: 'Uma vez por semana' },
 ]
 
-// Perfis de acompanhamento: pontos de partida para a médica ao cadastrar (ela ajusta depois).
-export const PERFIS_ACOMPANHAMENTO = [
-  {
-    valor: 'completo',
-    rotulo: 'Completo',
-    descricao: 'Todos os módulos, menos tabagismo.',
-    modulos: { pressao: true, peso: true, sono: true, tabagismo: false, alcool: true, atividade: true, estresse: true, sintomas: true, alimentacao: true },
-  },
-  {
-    valor: 'pressao',
-    rotulo: 'Foco em pressão',
-    descricao: 'Pressão, peso, sintomas e estresse.',
-    modulos: { pressao: true, peso: true, sono: false, tabagismo: false, alcool: false, atividade: false, estresse: true, sintomas: true, alimentacao: false },
-  },
-  {
-    valor: 'habitos',
-    rotulo: 'Hábitos e prevenção',
-    descricao: 'Peso, sono, álcool, atividade, alimentação e tabagismo.',
-    modulos: { pressao: false, peso: true, sono: true, tabagismo: true, alcool: true, atividade: true, estresse: true, sintomas: true, alimentacao: true },
-  },
-]
-
 export const PERGUNTAS_ALIMENTACAO = [
   { chave: 'ultraprocessados', rotulo: 'Consumiu alimentos ultraprocessados hoje?' },
   { chave: 'salgados', rotulo: 'Consumiu alimentos que considera muito salgados?' },

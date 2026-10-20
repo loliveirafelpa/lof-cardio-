@@ -22,7 +22,7 @@ Para qualquer decisão maior, consultar o `playbook-tecnico.md` completo nesta p
 - Metas de LDL, glicemia etc. **não** são aplicadas automaticamente: dependem do contexto clínico.
 - Médias de pressão só com dados suficientes e protocolo definido pela cardiologista.
 - **Destaques e cruzamentos** (pressão fora dos limites da médica ou ≥ 180/110, estresse > 7, pior noite de sono, inativo após 7 dias sem registro, Síntese com hábitos × sintomas): regras fixas em `src/lib/resumo.js`, só para a médica conferir. Cruzamentos sempre como coincidência ("nos dias com…"), com mínimo de dias por grupo — nunca causa.
-- Medicamentos e exames: gerenciados só pela Admin. Toda alteração de configuração do acompanhamento registra quem alterou e quando.
+- Medicamentos, exames e histórico clínico (antecedentes): gerenciados só pela Admin. Toda alteração de configuração do acompanhamento registra quem alterou e quando.
 
 ## Modo protótipo (atual)
 - **Ainda sem Supabase.** Os dados vêm de `src/lib/demo/` (`semente.js` gera ~45 dias fictícios relativos a hoje; `banco.js` guarda no localStorage do navegador). A tela de entrada é uma escolha de perfil; a `BarraDemonstracao` permite trocar de perfil e restaurar os dados.

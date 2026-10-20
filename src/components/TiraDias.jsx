@@ -1,11 +1,12 @@
-import { diasAtrasISO, formatarDia, paraData } from '../lib/datas'
+import { formatarDia, hojeISO, paraData, somarDias } from '../lib/datas'
 import { porcentagem } from '../lib/resumo'
 
 // Uma linha de quadradinhos, um por dia do período, para hábitos de sim/não (álcool, atividade…).
 // Cheio = sim; contorno = não; tracejado claro = sem resposta. Cada quadradinho traz o dia do mês,
 // e o total vem escrito ao lado: "15/30 dias · 50% do período". `valores`: { 'AAAA-MM-DD': true | false }.
-export default function TiraDias({ rotulo, dias, valores, detalhe }) {
-  const datas = Array.from({ length: dias }, (_, i) => diasAtrasISO(dias - 1 - i))
+// `ate`: último dia do período (padrão: hoje).
+export default function TiraDias({ rotulo, dias, ate = hojeISO(), valores, detalhe }) {
+  const datas = Array.from({ length: dias }, (_, i) => somarDias(ate, i - dias + 1))
   const sim = datas.filter((d) => valores[d] === true).length
   const semResposta = datas.filter((d) => valores[d] === undefined).length
   const largo = dias <= 31

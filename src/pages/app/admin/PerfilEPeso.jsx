@@ -1,11 +1,15 @@
-import { useState } from 'react'
-import { Scale, UserRound } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ClipboardList, Scale, UserRound } from 'lucide-react'
+import { useAuth } from '../../../lib/AuthContext'
 import { atualizarPerfil } from '../../../lib/perfisApi'
+import { buscarAntecedentes, salvarAntecedentes } from '../../../lib/clinicoApi'
 import { avaliarImc, formatarImc } from '../../../lib/imc'
-import { formatarDia, formatarNumero } from '../../../lib/datas'
+import { formatarDia, formatarDiaHora, formatarNumero } from '../../../lib/datas'
+import { ANTECEDENTES_VAZIO } from '../../../data/antecedentesOpcoes'
 import Bloco from '../../../components/Bloco'
 import Botao from '../../../components/Botao'
 import Campo from '../../../components/Campo'
+import CamposAntecedentes from '../../../components/CamposAntecedentes'
 import Sinal from '../../../components/Sinal'
 
 const dataCurta = (d) => formatarDia(d, { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -41,6 +45,8 @@ export default function PerfilEPeso({ perfil, dados, aoMudar }) {
         </Bloco>
       </form>
 
+      <HistoricoClinico userId={perfil.id} />
+
       <Bloco titulo="Peso e IMC" icone={<Scale size={15} />}>
         {resumo.imc && (
           <div className="space-y-2">
@@ -65,5 +71,46 @@ export default function PerfilEPeso({ perfil, dados, aoMudar }) {
         </ul>
       </Bloco>
     </div>
+  )
+}
+
+// Antecedentes clínicos (doenças prévias, cirurgias, família, alergias), preenchidos só pela médica.
+function HistoricoClinico({ userId }) {
+  const { perfil: medica } = useAuth()
+  const [salvo, setSalvo] = useState(undefined)
+  const [form, setForm] = useState(ANTECEDENTES_VAZIO)
+  const [aviso, setAviso] = useState('')
+
+  useEffect(() => {
+    buscarAntecedentes(userId).then((a) => {
+      setSalvo(a)
+      if (a) setForm({ ...ANTECEDENTES_VAZIO, ...a })
+    })
+  }, [userId])
+
+  async function salvar(e) {
+    e.preventDefault()
+    await salvarAntecedentes(userId, form, medica.nome)
+    setSalvo(await buscarAntecedentes(userId))
+    setAviso('Histórico atualizado.')
+  }
+
+  if (salvo === undefined) return null
+
+  return (
+    <form onSubmit={salvar} className="lg:row-span-2">
+      <Bloco titulo="Histórico clínico" icone={<ClipboardList size={15} />}>
+        <CamposAntecedentes valor={form} aoMudar={(v) => { setForm(v); setAviso('') }} prefixo="ficha" />
+        <div className="flex flex-wrap items-center gap-3">
+          <Botao type="submit">Salvar</Botao>
+          {aviso && <p className="text-sm text-carmim" role="status">{aviso}</p>}
+        </div>
+        {salvo && (
+          <p className="text-xs text-textoSecundario">
+            Última alteração: {salvo.atualizadoPor} · {formatarDiaHora(salvo.atualizadoEm)}
+          </p>
+        )}
+      </Bloco>
+    </form>
   )
 }

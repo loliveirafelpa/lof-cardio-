@@ -15,6 +15,13 @@ export function diasAtrasISO(n) {
   return diaISO(d)
 }
 
+// AAAA-MM-DD somando N dias (negativo volta) a outro AAAA-MM-DD.
+export function somarDias(dia, n) {
+  const d = paraData(dia)
+  d.setDate(d.getDate() + n)
+  return diaISO(d)
+}
+
 export function paraData(valor) {
   if (valor instanceof Date) return valor
   // Dia puro vira meio-dia local, para não "voltar um dia" por causa do fuso.

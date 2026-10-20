@@ -4,7 +4,8 @@ import { temConsentimentoSaudeVigente } from './consentimentosApi'
 import { listarCheckins, listarPesagens, listarPressoes, listarSintomas } from './registrosApi'
 import { resumirPeriodo, sinaisDeAtencao } from './resumo'
 
-export async function carregarAcompanhamento(perfil, dias) {
+// `ate`: último dia do período (padrão: hoje), para a médica olhar uma janela no passado.
+export async function carregarAcompanhamento(perfil, dias, ate) {
   const [config, consentiu, pressoes, pesagens, checkins, sintomas] = await Promise.all([
     buscarConfiguracao(perfil.id),
     temConsentimentoSaudeVigente(perfil.id),
@@ -13,7 +14,7 @@ export async function carregarAcompanhamento(perfil, dias) {
     listarCheckins(perfil.id),
     listarSintomas(perfil.id),
   ])
-  const resumo = resumirPeriodo({ perfil, config, pressoes, pesagens, checkins, sintomas, dias })
+  const resumo = resumirPeriodo({ perfil, config, pressoes, pesagens, checkins, sintomas, dias, ate })
   const sinais = sinaisDeAtencao(resumo, { consentiu, situacao: perfil.situacao })
   return { config, consentiu, pressoes, pesagens, checkins, sintomas, resumo, sinais }
 }

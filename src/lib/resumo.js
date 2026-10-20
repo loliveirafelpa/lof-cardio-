@@ -2,7 +2,7 @@
 // Descreve contagens, médias e coincidências; nunca afirma causa. Médias e comparações de pressão
 // só aparecem quando a médica liga essa opção (protocolo definido por ela) e há medições suficientes.
 import { avaliarImc, calcularIdade } from './imc'
-import { diasAtrasISO, diasEntre, formatarDia, formatarNumero, hojeISO } from './datas'
+import { diasEntre, formatarDia, formatarNumero, hojeISO, somarDias } from './datas'
 import { SINTOMAS } from '../data/checkinOpcoes'
 
 export const MIN_MEDICOES_PARA_MEDIA = 7
@@ -41,11 +41,20 @@ function piorNoite(noites) {
   return { ...iguais.at(-1), vezes: iguais.length }
 }
 
-export function resumirPeriodo({ perfil, config, pressoes, pesagens, checkins, sintomas, dias }) {
-  const desde = diasAtrasISO(dias - 1)
-  const pa = pressoes.filter((p) => p.medidoEm.slice(0, 10) >= desde)
-  const ci = checkins.filter((c) => c.data >= desde)
-  const si = sintomas.filter((s) => s.ocorridoEm.slice(0, 10) >= desde)
+// Registros de um período: `dias` dias terminando em `ate` (AAAA-MM-DD, inclusive).
+export function noPeriodo({ pressoes, checkins, sintomas }, dias, ate = hojeISO()) {
+  const desde = somarDias(ate, -(dias - 1))
+  const dentro = (dia) => dia >= desde && dia <= ate
+  return {
+    desde,
+    pressoes: pressoes.filter((p) => dentro(p.medidoEm.slice(0, 10))),
+    checkins: checkins.filter((c) => dentro(c.data)),
+    sintomas: sintomas.filter((s) => dentro(s.ocorridoEm.slice(0, 10))),
+  }
+}
+
+export function resumirPeriodo({ perfil, config, pressoes, pesagens, checkins, sintomas, dias, ate = hojeISO() }) {
+  const { pressoes: pa, checkins: ci, sintomas: si } = noPeriodo({ pressoes, checkins, sintomas }, dias, ate)
 
   const pesoAtual = pesagens.at(-1) ?? null
   const idade = calcularIdade(perfil.dataNascimento)

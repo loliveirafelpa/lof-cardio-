@@ -176,6 +176,31 @@ export function gerarSemente() {
     exame('e14', 'p-ana', 'outro', 1.1, 'mg/dL', 90, { nomeOutro: 'Creatinina' }),
   ]
 
+  const antecedentes = [
+    {
+      id: 'a1',
+      userId: 'p-carlos',
+      condicoes: ['hipertensao', 'dislipidemia'],
+      cirurgias: '',
+      familiar: 'Pai com infarto aos 55 anos.',
+      alergias: 'Nenhuma conhecida.',
+      observacoes: 'Tabagista há 25 anos.',
+      atualizadoPor: 'Dra. (nome a definir)',
+      atualizadoEm: criadoEm,
+    },
+    {
+      id: 'a2',
+      userId: 'p-ana',
+      condicoes: ['hipertensao'],
+      cirurgias: 'Colecistectomia (2015).',
+      familiar: 'Mãe hipertensa.',
+      alergias: 'Dipirona.',
+      observacoes: '',
+      atualizadoPor: 'Dra. (nome a definir)',
+      atualizadoEm: criadoEm,
+    },
+  ]
+
   const consentimentos = ['p-carlos', 'p-ana', 'p-marcos', 'p-roberto'].flatMap((userId) => [
     { id: `${userId}-ct`, userId, tipo: 'termos_de_uso', versao: '2026-10-19', aceitoEm: criadoEm, revogadoEm: null },
     { id: `${userId}-cs`, userId, tipo: 'dado_saude', versao: '2026-10-19', aceitoEm: criadoEm, revogadoEm: null },
@@ -220,6 +245,7 @@ export function gerarSemente() {
     sintomas,
     medicamentos,
     exames,
+    antecedentes,
     consultas,
   }
 }

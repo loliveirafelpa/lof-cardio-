@@ -1,6 +1,6 @@
 import { CalendarDays, GitCompareArrows, HeartPulse, Info, Moon, Sparkles, Stethoscope, Utensils } from 'lucide-react'
-import { cruzarFatores, destaquesDoPeriodo, frasesDosCruzamentos, frasesPorTema, nomeDoSintoma, porcentagem } from '../../../lib/resumo'
-import { diasAtrasISO, formatarDiaHora, formatarQuando } from '../../../lib/datas'
+import { cruzarFatores, destaquesDoPeriodo, frasesDosCruzamentos, frasesPorTema, noPeriodo, nomeDoSintoma, porcentagem } from '../../../lib/resumo'
+import { formatarDiaHora, formatarQuando } from '../../../lib/datas'
 import Bloco from '../../../components/Bloco'
 import ContextoDoDia from '../../../components/ContextoDoDia'
 import Sinal from '../../../components/Sinal'
@@ -22,14 +22,9 @@ const Lista = ({ frases }) => (
   </ul>
 )
 
-export default function Sintese({ dados, dias, descricaoPeriodo, proxima }) {
+export default function Sintese({ dados, dias, ate, descricaoPeriodo, proxima }) {
   const { resumo, config } = dados
-  const desde = diasAtrasISO(dias - 1)
-  const periodo = {
-    checkins: dados.checkins.filter((c) => c.data >= desde),
-    pressoes: dados.pressoes.filter((p) => p.medidoEm.slice(0, 10) >= desde),
-    sintomas: dados.sintomas.filter((s) => s.ocorridoEm.slice(0, 10) >= desde),
-  }
+  const periodo = noPeriodo(dados, dias, ate)
   const destaques = destaquesDoPeriodo(resumo, config)
   const temas = frasesPorTema(resumo)
   const cruzamentos = cruzarFatores(periodo, { mostrarMedias: config.mostrarMediasPressao }).filter((c) => MODULO_DO_FATOR[c.chave](config))

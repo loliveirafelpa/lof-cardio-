@@ -1,6 +1,7 @@
-// Dados clínicos cadastrados pela cardiologista: medicamentos e exames.
+// Dados clínicos cadastrados pela cardiologista: medicamentos, exames e antecedentes.
 // PROTÓTIPO: banco de demonstração do navegador.
-// Na versão com Supabase: tabelas `medicamentos` e `exames` com RLS só da médica (o paciente não grava).
+// Na versão com Supabase: tabelas `medicamentos`, `exames` e `antecedentes` (uma linha por paciente)
+// com RLS só da médica (o paciente não grava).
 import { ler, gravar, novoId, esperar } from './demo/banco'
 
 export async function listarMedicamentos(userId) {
@@ -47,5 +48,21 @@ export async function removerExame(id) {
   await esperar()
   gravar((b) => {
     b.exames = b.exames.filter((e) => e.id !== id)
+  })
+}
+
+export async function buscarAntecedentes(userId) {
+  await esperar()
+  return ler('antecedentes').find((a) => a.userId === userId) ?? null
+}
+
+// Um registro por paciente: cria na primeira vez e atualiza nas seguintes, guardando quem alterou e quando.
+export async function salvarAntecedentes(userId, antecedentes, autor) {
+  await esperar()
+  gravar((b) => {
+    const dados = { ...antecedentes, atualizadoPor: autor, atualizadoEm: new Date().toISOString() }
+    const existente = b.antecedentes.find((a) => a.userId === userId)
+    if (existente) Object.assign(existente, dados)
+    else b.antecedentes.push({ ...dados, id: novoId(), userId })
   })
 }

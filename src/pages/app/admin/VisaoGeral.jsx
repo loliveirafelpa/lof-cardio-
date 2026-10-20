@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Activity, ClipboardList, Gauge, LineChart, Stethoscope } from 'lucide-react'
-import { listarExames, listarMedicamentos } from '../../../lib/clinicoApi'
-import { classificarPressao, estresseAlto, foraDoPadrao, LIMITE_ESTRESSE, MIN_MEDICOES_PARA_MEDIA, nomeDoSintoma, PRESSAO_MUITO_ALTA } from '../../../lib/resumo'
+import { buscarAntecedentes, listarExames, listarMedicamentos } from '../../../lib/clinicoApi'
+import { nomeDaCondicao } from '../../../data/antecedentesOpcoes'
+import { classificarPressao, estresseAlto, foraDoPadrao, LIMITE_ESTRESSE, MIN_MEDICOES_PARA_MEDIA, noPeriodo, nomeDoSintoma, PRESSAO_MUITO_ALTA } from '../../../lib/resumo'
 import { formatarImc } from '../../../lib/imc'
-import { diasAtrasISO, formatarDia, formatarDiaHora, formatarNumero, hojeISO } from '../../../lib/datas'
+import { formatarDia, formatarDiaHora, formatarNumero, hojeISO } from '../../../lib/datas'
 import { PERGUNTAS_ALIMENTACAO } from '../../../data/checkinOpcoes'
 import { nomeDoExame } from '../../../data/examesOpcoes'
 import Bloco from '../../../components/Bloco'
@@ -32,13 +33,11 @@ function marcaPressao(valor, tipo, l) {
 
 const porDia = (checkins, campo) => Object.fromEntries(checkins.filter((c) => c[campo] !== null && c[campo] !== undefined).map((c) => [c.data, c[campo]]))
 
-export default function VisaoGeral({ perfil, dados, dias }) {
+export default function VisaoGeral({ perfil, dados, dias, ate }) {
   const { config, resumo, pressoes, pesagens, checkins } = dados
   const m = config.modulos
-  const desde = diasAtrasISO(dias - 1)
+  const { desde, pressoes: pa, checkins: ci } = noPeriodo(dados, dias, ate)
   const hoje = hojeISO()
-  const pa = pressoes.filter((p) => p.medidoEm.slice(0, 10) >= desde)
-  const ci = checkins.filter((c) => c.data >= desde)
   const l = config.limitesPressao
   const ultima = resumo.ultimaPressao
   const marcasPressao = {
@@ -125,7 +124,7 @@ export default function VisaoGeral({ perfil, dados, dias }) {
                 comHora
                 unidade="mmHg"
                 desde={desde}
-                ate={hoje}
+                ate={ate}
                 marcas={marcasPressao}
                 referencias={[
                   { valor: l.sistolicaMax, rotulo: `${l.sistolicaMax}` },
@@ -156,7 +155,7 @@ export default function VisaoGeral({ perfil, dados, dias }) {
               <h3 className="mb-3 font-interface text-sm font-semibold">Horas de sono</h3>
               <GraficoLinha
                 desde={desde}
-                ate={hoje}
+                ate={ate}
                 unidade="h"
                 formatar={(v) => formatarNumero(v)}
                 marcas={{ pior: { rotulo: `Pior noite de sono (${piorSono !== null ? formatarNumero(piorSono) : '—'} h)`, cor: 'atencao', forma: 'anel' } }}
@@ -183,7 +182,7 @@ export default function VisaoGeral({ perfil, dados, dias }) {
               </p>
               <GraficoLinha
                 desde={desde}
-                ate={hoje}
+                ate={ate}
                 referencias={[{ valor: LIMITE_ESTRESSE, rotulo: `${LIMITE_ESTRESSE}` }]}
                 marcas={{ alto: { rotulo: `Acima de ${LIMITE_ESTRESSE}`, cor: 'atencao', forma: 'triangulo' } }}
                 series={[
@@ -208,13 +207,13 @@ export default function VisaoGeral({ perfil, dados, dias }) {
               <Indicador rotulo="Total no período" valor={resumo.cigarrosTotal} unidade="cigarros" detalhe={`Soma de ${resumo.diasComCigarros} dias respondidos`} />
               <Indicador rotulo="Média diária" valor={formatarNumero(resumo.cigarrosMedia)} unidade="por dia" detalhe="Conforme declarado" />
             </div>
-            <GraficoLinha desde={desde} ate={hoje} series={[{ nome: 'Cigarros', cor: 'ardosia', pontos: cigarros.map((c) => ({ x: c.data, y: c.cigarros })) }]} />
+            <GraficoLinha desde={desde} ate={ate} series={[{ nome: 'Cigarros', cor: 'ardosia', pontos: cigarros.map((c) => ({ x: c.data, y: c.cigarros })) }]} />
           </div>
         )}
         <LegendaTira dias={dias} />
-        {m.alcool && <TiraDias rotulo="Consumiu álcool" dias={dias} valores={porDia(ci, 'alcool')} />}
+        {m.alcool && <TiraDias rotulo="Consumiu álcool" dias={dias} ate={ate} valores={porDia(ci, 'alcool')} />}
         {m.atividade && (
-          <TiraDias rotulo="Atividade física" dias={dias} valores={porDia(ci, 'atividade')} detalhe={`${resumo.atividade.minutos} min no total`} />
+          <TiraDias rotulo="Atividade física" dias={dias} ate={ate} valores={porDia(ci, 'atividade')} detalhe={`${resumo.atividade.minutos} min no total`} />
         )}
         {m.alimentacao &&
           PERGUNTAS_ALIMENTACAO.filter((p) => config.alimentacaoPerguntas.includes(p.chave)).map((p) => (
@@ -222,6 +221,7 @@ export default function VisaoGeral({ perfil, dados, dias }) {
               key={p.chave}
               rotulo={p.rotulo}
               dias={dias}
+              ate={ate}
               valores={porDia(ci, p.chave)}
             />
           ))}
@@ -263,16 +263,43 @@ function DadosClinicos({ userId }) {
   const [clinico, setClinico] = useState(null)
 
   useEffect(() => {
-    Promise.all([listarMedicamentos(userId), listarExames(userId)]).then(([medicamentos, exames]) => setClinico({ medicamentos, exames }))
+    Promise.all([listarMedicamentos(userId), listarExames(userId), buscarAntecedentes(userId)]).then(([medicamentos, exames, antecedentes]) =>
+      setClinico({ medicamentos, exames, antecedentes }),
+    )
   }, [userId])
 
   if (!clinico) return null
   const emUso = clinico.medicamentos.filter((m) => !m.termino || m.termino >= hojeISO())
   // Exame mais recente de cada indicador.
   const ultimos = Object.values(Object.fromEntries(clinico.exames.map((e) => [e.indicador === 'outro' ? e.nomeOutro : e.indicador, e])))
+  const a = clinico.antecedentes
+  const linhasHistorico = a
+    ? [
+        a.condicoes.length > 0 && ['Condições', a.condicoes.map(nomeDaCondicao).join(', ')],
+        a.cirurgias && ['Cirurgias', a.cirurgias],
+        a.familiar && ['Família', a.familiar],
+        a.alergias && ['Alergias', a.alergias],
+        a.observacoes && ['Observações', a.observacoes],
+      ].filter(Boolean)
+    : []
 
   return (
     <Bloco titulo="Dados clínicos" icone={<ClipboardList size={15} />} acao={<Origem medica />}>
+      <div>
+        <h3 className="mb-2 font-interface text-sm font-semibold">Histórico clínico</h3>
+        {linhasHistorico.length === 0 ? (
+          <p className="text-sm text-textoSecundario">Não preenchido. Dá para preencher na aba Perfil e peso.</p>
+        ) : (
+          <dl className="grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-[auto,1fr]">
+            {linhasHistorico.map(([rotulo, texto]) => (
+              <div key={rotulo} className="contents">
+                <dt className="text-textoSecundario">{rotulo}</dt>
+                <dd>{texto}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </div>
       <div className="grid gap-6 lg:grid-cols-2">
         <div>
           <h3 className="mb-2 font-interface text-sm font-semibold">Medicamentos em uso</h3>

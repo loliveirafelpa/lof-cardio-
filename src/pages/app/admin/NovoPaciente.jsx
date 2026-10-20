@@ -1,21 +1,46 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Check, Copy } from 'lucide-react'
+import { ArrowLeft, Check, Copy, Plus, X } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
 import { criarPaciente } from '../../../lib/perfisApi'
+import { salvarAntecedentes, salvarMedicamento } from '../../../lib/clinicoApi'
 import { avaliarImc, calcularIdade, formatarImc } from '../../../lib/imc'
+import { hojeISO } from '../../../lib/datas'
 import { CONFIGURACAO_PADRAO } from '../../../lib/demo/semente'
-import { PERFIS_ACOMPANHAMENTO } from '../../../data/checkinOpcoes'
+import { MODULOS } from '../../../data/checkinOpcoes'
+import { ANTECEDENTES_VAZIO } from '../../../data/antecedentesOpcoes'
 import Bloco from '../../../components/Bloco'
 import Botao, { BotaoLink } from '../../../components/Botao'
 import Campo from '../../../components/Campo'
+import CamposAntecedentes from '../../../components/CamposAntecedentes'
+
+const REMEDIO_VAZIO = { nome: '', dosagem: '', frequencia: '' }
+
+function OpcaoModulo({ rotulo, marcado, aoMudar, children }) {
+  return (
+    <div className={`rounded-2xl border ${marcado ? 'border-carmim bg-blush/50' : 'border-borda'}`}>
+      <label className="flex cursor-pointer items-center gap-3 px-4 py-3">
+        <input type="checkbox" className="h-4 w-4 accent-carmim" checked={marcado} onChange={(e) => aoMudar(e.target.checked)} />
+        <span className="font-interface text-sm font-semibold">{rotulo}</span>
+      </label>
+      {marcado && children && <div className="rounded-b-2xl border-t border-borda bg-branco px-4 py-4">{children}</div>}
+    </div>
+  )
+}
 
 // Cadastro de paciente pela cardiologista. Gera uma senha provisória e a mensagem pronta para WhatsApp.
 // PROTÓTIPO: o paciente criado aparece na tela de entrada para quem testa navegar como ele.
 export default function NovoPaciente() {
   const { perfil: medica } = useAuth()
   const [form, setForm] = useState({ nome: '', email: '', dataNascimento: '', alturaCm: '', pesoKg: '' })
-  const [perfilAcomp, setPerfilAcomp] = useState('completo')
+  // Começa tudo desmarcado: a médica escolhe cada módulo que quer acompanhar.
+  const [modulos, setModulos] = useState(() => Object.fromEntries(MODULOS.map((m) => [m.chave, false])))
+  const todosMarcados = MODULOS.every((m) => modulos[m.chave])
+  // Medicamentos e histórico: preenchidos aqui pela médica, não entram no check-in do paciente.
+  const [comRemedios, setComRemedios] = useState(false)
+  const [remedios, setRemedios] = useState([{ ...REMEDIO_VAZIO }])
+  const [comHistorico, setComHistorico] = useState(false)
+  const [antecedentes, setAntecedentes] = useState(ANTECEDENTES_VAZIO)
   const [erro, setErro] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [criado, setCriado] = useState(null)
@@ -35,7 +60,10 @@ export default function NovoPaciente() {
     if (!form.dataNascimento) return setErro('Informe a data de nascimento.')
     if (!(altura >= 100 && altura <= 230)) return setErro('Informe a altura em centímetros (ex.: 172).')
     if (form.pesoKg && !(peso >= 25 && peso <= 350)) return setErro('Confira o peso, em quilos.')
-    const preset = PERFIS_ACOMPANHAMENTO.find((p) => p.valor === perfilAcomp)
+    if (!MODULOS.some((m) => modulos[m.chave])) return setErro('Marque pelo menos um módulo para acompanhar.')
+    // Linhas totalmente vazias são ignoradas; as preenchidas precisam de nome e dosagem.
+    const remediosPreenchidos = comRemedios ? remedios.filter((m) => m.nome.trim() || m.dosagem.trim() || m.frequencia.trim()) : []
+    if (remediosPreenchidos.some((m) => !m.nome.trim() || !m.dosagem.trim())) return setErro('Informe o nome e a dosagem de cada medicamento.')
     setEnviando(true)
     try {
       const r = await criarPaciente(
@@ -45,10 +73,21 @@ export default function NovoPaciente() {
           dataNascimento: form.dataNascimento,
           alturaCm: altura,
           pesoKg: form.pesoKg ? peso : null,
-          configuracao: { ...CONFIGURACAO_PADRAO, modulos: { ...preset.modulos } },
+          configuracao: { ...CONFIGURACAO_PADRAO, modulos: { ...modulos } },
         },
         medica.nome,
       )
+      for (const m of remediosPreenchidos) {
+        await salvarMedicamento(r.id, {
+          nome: m.nome.trim(),
+          dosagem: m.dosagem.trim(),
+          frequencia: m.frequencia.trim(),
+          inicio: hojeISO(),
+          termino: null,
+          observacoes: '',
+        })
+      }
+      if (comHistorico) await salvarAntecedentes(r.id, antecedentes, medica.nome)
       setCriado({ ...r, nome: form.nome.trim(), email: form.email.trim().toLowerCase() })
     } catch (e2) {
       setErro(e2.message || 'Não foi possível cadastrar agora.')
@@ -108,21 +147,58 @@ export default function NovoPaciente() {
           )}
         </Bloco>
 
-        <Bloco titulo="Perfil de acompanhamento">
-          <p className="text-sm text-textoSecundario">Um ponto de partida. Depois do cadastro, cada módulo pode ser ligado ou desligado.</p>
+        <Bloco titulo="O que acompanhar">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-sm text-textoSecundario">Marque os módulos que o paciente vai registrar. Depois do cadastro, dá para mudar na Configuração.</p>
+            <button
+              type="button"
+              onClick={() => setModulos(Object.fromEntries(MODULOS.map((m) => [m.chave, !todosMarcados])))}
+              className="font-interface text-xs font-semibold text-carmim underline"
+            >
+              {todosMarcados ? 'Desmarcar todos' : 'Marcar todos'}
+            </button>
+          </div>
           <div className="space-y-2">
-            {PERFIS_ACOMPANHAMENTO.map((p) => (
-              <label
-                key={p.valor}
-                className={`flex cursor-pointer gap-3 rounded-2xl border p-4 ${perfilAcomp === p.valor ? 'border-carmim bg-blush/50' : 'border-borda'}`}
-              >
-                <input type="radio" name="perfil" className="mt-1 accent-carmim" checked={perfilAcomp === p.valor} onChange={() => setPerfilAcomp(p.valor)} />
-                <span>
-                  <span className="block font-interface text-sm font-semibold">{p.rotulo}</span>
-                  <span className="text-sm text-textoSecundario">{p.descricao}</span>
-                </span>
-              </label>
+            {MODULOS.map((m) => (
+              <OpcaoModulo key={m.chave} rotulo={m.rotulo} marcado={modulos[m.chave]} aoMudar={(v) => setModulos({ ...modulos, [m.chave]: v })} />
             ))}
+          </div>
+
+          <p className="pt-2 text-sm text-textoSecundario">Preenchidos por você agora, na ficha do paciente (opcionais):</p>
+          <div className="space-y-2">
+            <OpcaoModulo rotulo="Medicamentos" marcado={comRemedios} aoMudar={setComRemedios}>
+              <div className="space-y-3">
+                {remedios.map((m, i) => {
+                  const mudar = (campo) => (e) => setRemedios(remedios.map((x, j) => (j === i ? { ...x, [campo]: e.target.value } : x)))
+                  return (
+                    <div key={i} className="grid grid-cols-[1fr,auto] items-end gap-2">
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <Campo rotulo="Medicamento" id={`rem-nome-${i}`} placeholder="ex.: Losartana" value={m.nome} onChange={mudar('nome')} />
+                        <Campo rotulo="Dosagem" id={`rem-dose-${i}`} placeholder="50 mg" value={m.dosagem} onChange={mudar('dosagem')} />
+                        <Campo rotulo="Frequência" id={`rem-freq-${i}`} placeholder="1x ao dia, manhã" value={m.frequencia} onChange={mudar('frequencia')} />
+                      </div>
+                      {remedios.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setRemedios(remedios.filter((_, j) => j !== i))}
+                          aria-label={`Remover ${m.nome || 'este medicamento'}`}
+                          className="mb-2 rounded-full p-2 text-textoSecundario hover:bg-papel hover:text-alerta"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+                <Botao type="button" variante="secundario" onClick={() => setRemedios([...remedios, { ...REMEDIO_VAZIO }])}>
+                  <Plus size={16} aria-hidden /> Adicionar medicamento
+                </Botao>
+                <p className="text-xs text-textoSecundario">Entram como em uso a partir de hoje. Datas e observações podem ser ajustadas na aba Medicamentos.</p>
+              </div>
+            </OpcaoModulo>
+            <OpcaoModulo rotulo="Histórico do paciente" marcado={comHistorico} aoMudar={setComHistorico}>
+              <CamposAntecedentes valor={antecedentes} aoMudar={setAntecedentes} />
+            </OpcaoModulo>
           </div>
         </Bloco>
 
