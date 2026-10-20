@@ -61,6 +61,7 @@ Baseada em três imagens de referência (em `referencias/`, só para inspiraçã
 - **Lembretes por e-mail:** praticamente sem custo (Resend, gratuito até 3.000 e-mails por mês, mais um domínio próprio, cerca de R$ 40 por ano). Permite uma régua: lembrete após 1 dia sem check-in, aviso de consulta, boas-vindas.
 - **Lembretes por WhatsApp:** só pela API oficial da Meta, com número próprio e empresa verificada; cerca de R$ 0,04 a R$ 0,08 por mensagem (≈ R$ 25 a 50 por mês para 50 pacientes). APIs não oficiais descartadas pelo risco de bloqueio.
 - Os lembretes nunca levam dado de saúde e dependem de autorização do paciente. Todos exigem o Supabase ligado.
+- **Leitura automática de laudos (Exames):** a médica sobe PDF ou foto e os campos vêm preenchidos para ela conferir antes de salvar. Caminho preferido: leitura no próprio navegador, sem custo e sem o laudo sair do computador — PDF digital com extração de texto (pdf.js) e regras por exame; foto com OCR (Tesseract), que erra mais. Alternativa: IA (Claude) via Edge Function, mais robusta, centavos por laudo, exige menção na política de privacidade. Adiado: precisa de 2 ou 3 laudos fictícios ou anonimizados de laboratórios diferentes para testar as regras.
 
 ## Para validar com a cardiologista
 - Nome, CRM e se o produto leva o nome dela ou só a marca LOF Heart.
@@ -76,7 +77,7 @@ Baseada em três imagens de referência (em `referencias/`, só para inspiraçã
 - Canal de contato para assuntos de privacidade.
 
 ## Próximos passos
-1. Commit do trabalho de 19/10 e publicação do protótipo no Vercel, para a cardiologista testar.
+1. Protótipo publicado no Vercel em 20/10 — enviar o link para a cardiologista testar.
 2. Validar com ela as perguntas acima — em especial os limites de pressão e se os cruzamentos da Síntese ajudam na consulta.
 3. Decidir o plano do Supabase (gratuito está no limite de 2 projetos; Pro ≈ US$ 45/mês para 3) e conectar o banco.
 

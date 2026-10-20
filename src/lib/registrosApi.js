@@ -54,3 +54,19 @@ export async function removerPressao(userId, id) {
     b.pressoes = b.pressoes.filter((p) => !(p.id === id && p.userId === userId))
   })
 }
+
+// Correção de uma pesagem digitada errado: o IMC é recalculado na tela a partir do novo peso.
+export async function corrigirPesagem(userId, id, pesoKg) {
+  await esperar()
+  gravar((b) => {
+    const pesagem = b.pesagens.find((p) => p.id === id && p.userId === userId)
+    if (pesagem) Object.assign(pesagem, { pesoKg, editadoEm: new Date().toISOString() })
+  })
+}
+
+export async function removerPesagem(userId, id) {
+  await esperar()
+  gravar((b) => {
+    b.pesagens = b.pesagens.filter((p) => !(p.id === id && p.userId === userId))
+  })
+}

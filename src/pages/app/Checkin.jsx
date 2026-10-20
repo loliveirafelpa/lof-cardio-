@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Activity, Apple, BedDouble, Brain, CheckCircle2, Cigarette, Gauge, Scale, Stethoscope } from 'lucide-react'
 import { useAuth } from '../../lib/AuthContext'
 import { buscarConfiguracao } from '../../lib/configuracoesApi'
 import { buscarCheckin, listarPesagens, listarPressoes, salvarCheckinCompleto } from '../../lib/registrosApi'
 import { avaliarImc, calcularIdade, formatarImc } from '../../lib/imc'
-import { formatarDiaLongo, formatarHora, hojeISO, paraCampoDataHora } from '../../lib/datas'
+import { diaISO, diasAtrasISO, formatarDiaLongo, formatarHora, hojeISO, paraCampoDataHora } from '../../lib/datas'
 import { CONTEXTOS_SINTOMA, NIVEIS_ESFORCO, PERGUNTAS_ALIMENTACAO, QUALIDADE_SONO, SINTOMAS } from '../../data/checkinOpcoes'
 import { Escala, EscolhaMultipla, EscolhaUnica, Pergunta, SimNao } from '../../components/Escolhas'
 import AvisoEmergencia from '../../components/AvisoEmergencia'
@@ -15,6 +16,7 @@ import Pagina, { Destaque } from '../../components/Pagina'
 
 // Check-in do dia, montado só com os módulos que a cardiologista ativou para este paciente.
 // Tudo é opcional: o paciente responde o que quiser e salva de uma vez.
+// Com ?dia=AAAA-MM-DD, ajusta o check-in de um dia anterior (dentro dos dias que o histórico mostra).
 const VAZIO = {
   sonoHoras: '',
   sonoQualidade: null,
@@ -30,14 +32,29 @@ const VAZIO = {
   frutasVerduras: null,
 }
 
+// Mesmo período do histórico: dá para ajustar o que o paciente consegue ver lá.
+const DIAS_EDITAVEIS = 30
+
+const diaEscolhido = (valor, hoje) =>
+  /^\d{4}-\d{2}-\d{2}$/.test(valor ?? '') && valor <= hoje && valor >= diasAtrasISO(DIAS_EDITAVEIS - 1) ? valor : hoje
+
 const numeroOuNulo = (v) => (v === '' || v === null || v === undefined ? null : Number(String(v).replace(',', '.')))
 
 export default function Checkin() {
+  const [params] = useSearchParams()
+  const dia = diaEscolhido(params.get('dia'), hojeISO())
+  // A chave recomeça o formulário do zero ao trocar de dia (ex.: do histórico para o check-in de hoje).
+  return <FormularioCheckin key={dia} dia={dia} />
+}
+
+function FormularioCheckin({ dia }) {
   const { perfil } = useAuth()
   const hoje = hojeISO()
+  const ehHoje = dia === hoje
+  const quando = ehHoje ? 'hoje' : 'neste dia'
   const [carregado, setCarregado] = useState(null)
   const [respostas, setRespostas] = useState(VAZIO)
-  const [pressao, setPressao] = useState({ sistolica: '', diastolica: '', medidoEm: paraCampoDataHora(), emRepouso: null, aparelho: '' })
+  const [pressao, setPressao] = useState({ sistolica: '', diastolica: '', medidoEm: ehHoje ? paraCampoDataHora() : `${dia}T12:00`, emRepouso: null, aparelho: '' })
   const [peso, setPeso] = useState('')
   const [sintoma, setSintoma] = useState({ teve: null, lista: [], outro: '', contexto: '', hora: '', duracao: '' })
   const [erro, setErro] = useState('')
@@ -45,8 +62,9 @@ export default function Checkin() {
   const [salvo, setSalvo] = useState(false)
 
   useEffect(() => {
-    Promise.all([buscarConfiguracao(perfil.id), buscarCheckin(perfil.id, hoje), listarPesagens(perfil.id), listarPressoes(perfil.id, hoje)]).then(
-      ([config, existente, pesagens, pressoesHoje]) => {
+    Promise.all([buscarConfiguracao(perfil.id), buscarCheckin(perfil.id, dia), listarPesagens(perfil.id), listarPressoes(perfil.id, dia)]).then(
+      ([config, existente, pesagens, pressoes]) => {
+        const pressoesHoje = pressoes.filter((p) => diaISO(new Date(p.medidoEm)) === dia)
         setCarregado({ config, existente, pesoAtual: pesagens.at(-1), pressoesHoje })
         if (existente) {
           const r = { ...VAZIO }
@@ -57,7 +75,7 @@ export default function Checkin() {
         if (ultimoAparelho) setPressao((p) => ({ ...p, aparelho: ultimoAparelho }))
       },
     )
-  }, [perfil.id, hoje])
+  }, [perfil.id, dia])
 
   const responder = (campo) => (valor) => setRespostas((r) => ({ ...r, [campo]: valor }))
 
@@ -79,9 +97,9 @@ export default function Checkin() {
   async function salvar() {
     setErro('')
     const sis = numeroOuNulo(pressao.sistolica)
-    const dia = numeroOuNulo(pressao.diastolica)
-    if ((sis === null) !== (dia === null)) return setErro('Para registrar a pressão, preencha os dois números (sistólica e diastólica).')
-    if (sis !== null && (sis < 60 || sis > 260 || dia < 30 || dia > 160 || dia >= sis)) {
+    const dias = numeroOuNulo(pressao.diastolica)
+    if ((sis === null) !== (dias === null)) return setErro('Para registrar a pressão, preencha os dois números (sistólica e diastólica).')
+    if (sis !== null && (sis < 60 || sis > 260 || dias < 30 || dias > 160 || dias >= sis)) {
       return setErro('Confira os números da pressão: o primeiro (sistólica) é o maior, por exemplo 120/80.')
     }
     if (pesoNovo !== null && (pesoNovo < 25 || pesoNovo > 350)) return setErro('Confira o peso informado, em quilos.')
@@ -92,9 +110,11 @@ export default function Checkin() {
     setSalvando(true)
     try {
       await salvarCheckinCompleto(perfil.id, {
-        data: hoje,
+        data: dia,
         checkin: {
           ...respostas,
+          // Ajuste feito depois do dia fica marcado, para a médica saber que o registro foi revisto.
+          ...(!ehHoje && existente && { editadoEm: new Date().toISOString() }),
           sonoHoras: horas,
           cigarros: numeroOuNulo(respostas.cigarros),
           vapeMinutos: numeroOuNulo(respostas.vapeMinutos),
@@ -104,14 +124,14 @@ export default function Checkin() {
         pressao: sis !== null && {
           medidoEm: new Date(pressao.medidoEm).toISOString(),
           sistolica: sis,
-          diastolica: dia,
+          diastolica: dias,
           emRepouso: pressao.emRepouso,
           aparelho: pressao.aparelho.trim(),
         },
-        pesagem: pesoNovo !== null && { medidoEm: hoje, pesoKg: pesoNovo, alturaCm: perfil.alturaCm },
+        pesagem: pesoNovo !== null && { medidoEm: dia, pesoKg: pesoNovo, alturaCm: perfil.alturaCm },
         sintoma: sintoma.teve &&
           sintoma.lista.length > 0 && {
-            ocorridoEm: new Date(`${hoje}T${sintoma.hora || formatarHora(new Date())}:00`).toISOString(),
+            ocorridoEm: new Date(`${dia}T${sintoma.hora || (ehHoje ? formatarHora(new Date()) : '12:00')}:00`).toISOString(),
             sintomas: sintoma.lista,
             outro: sintoma.outro.trim(),
             contexto: sintoma.contexto.trim(),
@@ -130,7 +150,7 @@ export default function Checkin() {
 
   if (salvo) {
     return (
-      <Pagina sobretitulo={formatarDiaLongo(hoje)} titulo={<>Check-in <Destaque>salvo</Destaque></>}>
+      <Pagina sobretitulo={formatarDiaLongo(dia)} titulo={<>Check-in <Destaque>{ehHoje ? 'salvo' : 'atualizado'}</Destaque></>}>
         <Bloco>
           <p className="flex items-center gap-2 font-interface font-semibold text-carmim">
             <CheckCircle2 size={20} aria-hidden /> Obrigado por registrar.
@@ -139,7 +159,7 @@ export default function Checkin() {
           {graves.length > 0 && <AvisoEmergencia destaque />}
           <div className="flex flex-wrap gap-3">
             <BotaoLink to="/app">Voltar ao início</BotaoLink>
-            <BotaoLink variante="secundario" to="/app/historico">Ver meu histórico</BotaoLink>
+            <BotaoLink variante="secundario" to="/app/historico?aba=dias">Ver meu histórico</BotaoLink>
           </div>
         </Bloco>
       </Pagina>
@@ -148,15 +168,21 @@ export default function Checkin() {
 
   return (
     <Pagina
-      sobretitulo={formatarDiaLongo(hoje)}
-      titulo={<>Check-in de <Destaque>hoje</Destaque></>}
-      descricao={existente ? 'Você já registrou hoje. Pode ajustar o que quiser e salvar de novo.' : 'Responda o que fizer sentido para o seu dia. Tudo é opcional.'}
+      sobretitulo={formatarDiaLongo(dia)}
+      titulo={ehHoje ? <>Check-in de <Destaque>hoje</Destaque></> : <>Ajustar <Destaque>check-in</Destaque></>}
+      descricao={
+        !ehHoje
+          ? 'Corrija ou complete o que registrou neste dia. A cardiologista verá a versão atualizada, marcada como ajustada.'
+          : existente
+            ? 'Você já registrou hoje. Pode ajustar o que quiser e salvar de novo.'
+            : 'Responda o que fizer sentido para o seu dia. Tudo é opcional.'
+      }
     >
       {m.pressao && (
         <Bloco titulo="Pressão arterial" icone={<Gauge size={15} />}>
           {pressoesHoje.length > 0 && (
             <p className="text-sm text-textoSecundario">
-              Hoje você já registrou: {pressoesHoje.map((p) => `${p.sistolica}/${p.diastolica} às ${formatarHora(p.medidoEm)}`).join(' · ')}. Pode adicionar outra medição.
+              {ehHoje ? 'Hoje' : 'Neste dia'} você já registrou: {pressoesHoje.map((p) => `${p.sistolica}/${p.diastolica} às ${formatarHora(p.medidoEm)}`).join(' · ')}. Pode adicionar outra medição.
             </p>
           )}
           <div className="grid grid-cols-2 gap-3">
@@ -174,7 +200,7 @@ export default function Checkin() {
       {m.peso && (
         <Bloco titulo="Peso" icone={<Scale size={15} />}>
           <Campo
-            rotulo="Se você se pesou hoje, quanto deu?"
+            rotulo={`Se você se pesou ${quando}, quanto deu?`}
             id="peso"
             inputMode="decimal"
             placeholder={pesoAtual ? `último: ${String(pesoAtual.pesoKg).replace('.', ',')} kg` : 'ex.: 72,5'}
@@ -194,7 +220,7 @@ export default function Checkin() {
 
       {m.sono && (
         <Bloco titulo="Sono" icone={<BedDouble size={15} />}>
-          <Campo rotulo="Quantas horas você dormiu na última noite?" id="sono" inputMode="decimal" placeholder="ex.: 7" value={respostas.sonoHoras ?? ''} onChange={(e) => responder('sonoHoras')(e.target.value)} />
+          <Campo rotulo={`Quantas horas você dormiu na ${ehHoje ? 'última noite' : 'noite anterior a este dia'}?`} id="sono" inputMode="decimal" placeholder="ex.: 7" value={respostas.sonoHoras ?? ''} onChange={(e) => responder('sonoHoras')(e.target.value)} />
           <Pergunta titulo="Como avalia a qualidade do seu sono?">
             <EscolhaUnica opcoes={QUALIDADE_SONO} valor={respostas.sonoQualidade} aoMudar={responder('sonoQualidade')} />
           </Pergunta>
@@ -204,10 +230,10 @@ export default function Checkin() {
       {m.tabagismo && (
         <Bloco titulo="Tabagismo" icone={<Cigarette size={15} />}>
           {config.tabagismoTipo !== 'eletronico' && (
-            <Campo rotulo="Quantos cigarros você fumou hoje?" id="cigarros" inputMode="numeric" placeholder="ex.: 0" value={respostas.cigarros ?? ''} onChange={(e) => responder('cigarros')(e.target.value)} />
+            <Campo rotulo={`Quantos cigarros você fumou ${quando}?`} id="cigarros" inputMode="numeric" placeholder="ex.: 0" value={respostas.cigarros ?? ''} onChange={(e) => responder('cigarros')(e.target.value)} />
           )}
           {config.tabagismoTipo !== 'convencional' && (
-            <Campo rotulo="Por quanto tempo, mais ou menos, usou o cigarro eletrônico hoje?" id="vape" inputMode="numeric" placeholder="em minutos" value={respostas.vapeMinutos ?? ''} onChange={(e) => responder('vapeMinutos')(e.target.value)} ajuda="Uma estimativa já ajuda." />
+            <Campo rotulo={`Por quanto tempo, mais ou menos, usou o cigarro eletrônico ${quando}?`} id="vape" inputMode="numeric" placeholder="em minutos" value={respostas.vapeMinutos ?? ''} onChange={(e) => responder('vapeMinutos')(e.target.value)} ajuda="Uma estimativa já ajuda." />
           )}
         </Bloco>
       )}
@@ -215,12 +241,12 @@ export default function Checkin() {
       {(m.alcool || m.atividade) && (
         <Bloco titulo="Hábitos do dia" icone={<Activity size={15} />}>
           {m.alcool && (
-            <Pergunta titulo="Você consumiu bebida alcoólica hoje?">
+            <Pergunta titulo={`Você consumiu bebida alcoólica ${quando}?`}>
               <SimNao valor={respostas.alcool} aoMudar={responder('alcool')} />
             </Pergunta>
           )}
           {m.atividade && (
-            <Pergunta titulo="Você realizou atividade física hoje?">
+            <Pergunta titulo={`Você realizou atividade física ${quando}?`}>
               <SimNao valor={respostas.atividade} aoMudar={responder('atividade')} />
               {respostas.atividade && (
                 <div className="mt-5 space-y-5 border-l-2 border-blush pl-4">
@@ -237,7 +263,7 @@ export default function Checkin() {
 
       {m.estresse && (
         <Bloco titulo="Estresse" icone={<Brain size={15} />}>
-          <Pergunta titulo="Qual foi seu nível de estresse hoje?">
+          <Pergunta titulo={`Qual foi seu nível de estresse ${quando}?`}>
             <Escala id="estresse" valor={respostas.estresse} aoMudar={responder('estresse')} rotuloMin="Nada estressante" rotuloMax="Muito estressante" />
           </Pergunta>
         </Bloco>
@@ -245,7 +271,7 @@ export default function Checkin() {
 
       {m.sintomas && (
         <Bloco titulo="Sintomas" icone={<Stethoscope size={15} />}>
-          <Pergunta titulo="Você sentiu algum sintoma hoje?">
+          <Pergunta titulo={`Você sentiu algum sintoma ${quando}?`}>
             <SimNao valor={sintoma.teve} aoMudar={(v) => setSintoma({ ...sintoma, teve: v })} />
           </Pergunta>
           {sintoma.teve && (
